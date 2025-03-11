@@ -1,23 +1,22 @@
 local player = game.Players.LocalPlayer
-local camera = workspace.CurrentCamera
 
--- Create the HUD
+-- Create HUD
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 400)
+frame.Size = UDim2.new(0, 350, 0, 400)
 frame.Position = UDim2.new(0.05, 0, 0.1, 0)
 frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 frame.BorderSizePixel = 2
 frame.Parent = screenGui
 frame.Active = true
-frame.Draggable = true -- Makes the HUD movable
+frame.Draggable = true -- Movable HUD
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0.1, 0)
 title.BackgroundTransparency = 1
-title.Text = "Object & NPC List"
+title.Text = "Object & NPC Detector"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.SourceSansBold
 title.TextScaled = true
@@ -25,61 +24,95 @@ title.Parent = frame
 
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(1, -10, 0.1, 0)
-searchBox.Position = UDim2.new(0, 5, 0.12, 0)
-searchBox.PlaceholderText = "Search..."
-searchBox.Text = ""
-searchBox.Font = Enum.Font.SourceSans
-searchBox.TextScaled = true
+searchBox.Position = UDim2.new(0, 5, 0.1, 0)
+searchBox.PlaceholderText = "Search objects..."
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 searchBox.Parent = frame
 
 local scrollFrame = Instance.new("ScrollingFrame")
 scrollFrame.Size = UDim2.new(1, -10, 0.75, 0)
-scrollFrame.Position = UDim2.new(0, 5, 0.25, 0)
-scrollFrame.CanvasSize = UDim2.new(0, 0, 10, 0)
-scrollFrame.BackgroundTransparency = 1
+scrollFrame.Position = UDim2.new(0, 5, 0.22, 0)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 5, 0)
+scrollFrame.ScrollBarThickness = 5
 scrollFrame.Parent = frame
 
-local uiListLayout = Instance.new("UIListLayout")
-uiListLayout.Parent = scrollFrame
-uiListLayout.SortOrder = Enum.SortOrder.Name
+-- Function to classify object type
+local function getObjectType(obj)
+    if obj:IsA("Model") then
+        -- Check if it's an NPC (has a Humanoid)
+        if obj:FindFirstChildOfClass("Humanoid") then
+            return "NPC"
+        else
+            return "Object"
+        end
+    elseif obj:IsA("BasePart") then
+        return "Physical Object"
+    elseif obj:IsA("Tool") then
+        return "Collectible"
+    elseif obj:IsA("ProximityPrompt") then
+        return "Interactable"
+    elseif obj:IsA("RemoteEvent") then
+        return "Scripted Event"
+    else
+        return "Unknown"
+    end
+end
 
--- Function to update the list
-local function updateList()
-    for _, child in pairs(scrollFrame:GetChildren()) do
-        if child:IsA("TextLabel") then
-            child:Destroy()
+-- Function to find and display objects
+local function scanObjects()
+    -- Clear old results
+    for _, v in pairs(scrollFrame:GetChildren()) do
+        if v:IsA("TextLabel") then v:Destroy() end
+    end
+
+    local objects = {}
+    
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") or obj:IsA("BasePart") or obj:IsA("Tool") or obj:IsA("ProximityPrompt") then
+            local objType = getObjectType(obj)
+            table.insert(objects, {name = obj.Name, type = objType})
         end
     end
 
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") or (obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid")) then
-            local objName = obj.Parent and obj.Parent:IsA("Model") and obj.Parent.Name or obj.Name
+    -- Sort objects alphabetically
+    table.sort(objects, function(a, b) return a.name < b.name end)
 
-            local label = Instance.new("TextLabel")
-            label.Size = UDim2.new(1, 0, 0, 30)
-            label.BackgroundTransparency = 1
-            label.Text = objName
-            label.TextColor3 = Color3.fromRGB(255, 255, 255)
-            label.Font = Enum.Font.SourceSans
-            label.TextScaled = true
-            label.Parent = scrollFrame
+    -- Display objects
+    for i, data in ipairs(objects) do
+        local objLabel = Instance.new("TextLabel")
+        objLabel.Size = UDim2.new(1, 0, 0, 25)
+        objLabel.Position = UDim2.new(0, 0, 0, (i - 1) * 25)
+        objLabel.Text = data.name .. " (" .. data.type .. ")"
+        objLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        objLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        objLabel.Parent = scrollFrame
+    end
+
+    -- Adjust scrolling size
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, #objects * 25)
+end
+
+-- Function to filter search results
+local function filterResults()
+    local searchText = searchBox.Text:lower()
+    
+    for _, label in pairs(scrollFrame:GetChildren()) do
+        if label:IsA("TextLabel") then
+            if searchText == "" or label.Text:lower():find(searchText) then
+                label.Visible = true
+            else
+                label.Visible = false
+            end
         end
     end
 end
 
--- Search function
-searchBox.Changed:Connect(function(property)
-    if property == "Text" then
-        for _, label in pairs(scrollFrame:GetChildren()) do
-            if label:IsA("TextLabel") then
-                label.Visible = label.Text:lower():find(searchBox.Text:lower()) ~= nil
-            end
-        end
-    end
-end)
+-- Search box event
+searchBox.Changed:Connect(filterResults)
 
--- Auto-update list every 5 seconds
+-- Scan for objects every 5 seconds
 while true do
-    updateList()
-    wait(5)
+    scanObjects()
+    task.wait(5)
 end
