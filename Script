@@ -1,73 +1,85 @@
-local Players = game:GetService("Players")
+local player = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
 
--- Function to create a movable HUD
-local function createHUD(player)
-    local playerGui = player:FindFirstChildOfClass("PlayerGui") or player:WaitForChild("PlayerGui")
+-- Create the HUD
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player:WaitForChild("PlayerGui")
 
-    -- Create ScreenGui
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "ObjectLister"
-    gui.Parent = playerGui
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 300, 0, 400)
+frame.Position = UDim2.new(0.05, 0, 0.1, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 2
+frame.Parent = screenGui
+frame.Active = true
+frame.Draggable = true -- Makes the HUD movable
 
-    -- Create main frame (movable)
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0.3, 0, 0.6, 0)
-    mainFrame.Position = UDim2.new(0.02, 0, 0.2, 0)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    mainFrame.BackgroundTransparency = 0.5
-    mainFrame.BorderSizePixel = 2
-    mainFrame.Parent = gui
-    mainFrame.Active = true
-    mainFrame.Draggable = true -- Makes it movable
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0.1, 0)
+title.BackgroundTransparency = 1
+title.Text = "Object & NPC List"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.SourceSansBold
+title.TextScaled = true
+title.Parent = frame
 
-    -- Create scrolling frame for object list
-    local scrollingFrame = Instance.new("ScrollingFrame")
-    scrollingFrame.Size = UDim2.new(1, 0, 1, -30)
-    scrollingFrame.Position = UDim2.new(0, 0, 0, 30)
-    scrollingFrame.BackgroundTransparency = 1
-    scrollingFrame.Parent = mainFrame
-    scrollingFrame.CanvasSize = UDim2.new(0, 0, 2, 0)
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -10, 0.1, 0)
+searchBox.Position = UDim2.new(0, 5, 0.12, 0)
+searchBox.PlaceholderText = "Search..."
+searchBox.Text = ""
+searchBox.Font = Enum.Font.SourceSans
+searchBox.TextScaled = true
+searchBox.Parent = frame
 
-    -- UI List Layout for ordered object display
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.Parent = scrollingFrame
-    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -10, 0.75, 0)
+scrollFrame.Position = UDim2.new(0, 5, 0.25, 0)
+scrollFrame.CanvasSize = UDim2.new(0, 0, 10, 0)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.Parent = frame
 
-    -- Create title bar for dragging
-    local titleBar = Instance.new("TextLabel")
-    titleBar.Size = UDim2.new(1, 0, 0, 30)
-    titleBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleBar.Text = "Object List"
-    titleBar.Font = Enum.Font.SourceSansBold
-    titleBar.TextSize = 18
-    titleBar.Parent = mainFrame
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Parent = scrollFrame
+uiListLayout.SortOrder = Enum.SortOrder.Name
 
-    return scrollingFrame
-end
+-- Function to update the list
+local function updateList()
+    for _, child in pairs(scrollFrame:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
 
--- Function to list all objects inside the UI
-local function listAllObjects(parent, uiParent, indent)
-    indent = indent or 0
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") or (obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid")) then
+            local objName = obj.Parent and obj.Parent:IsA("Model") and obj.Parent.Name or obj.Name
 
-    for _, obj in pairs(parent:GetChildren()) do
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, 0, 0, 20)
-        label.BackgroundTransparency = 1
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.Text = string.rep("   ", indent) .. "- " .. obj.Name .. " (" .. obj.ClassName .. ")"
-        label.TextXAlignment = Enum.TextXAlignment.Left
-        label.Parent = uiParent
-
-        listAllObjects(obj, uiParent, indent + 1) -- Recursively list children
+            local label = Instance.new("TextLabel")
+            label.Size = UDim2.new(1, 0, 0, 30)
+            label.BackgroundTransparency = 1
+            label.Text = objName
+            label.TextColor3 = Color3.fromRGB(255, 255, 255)
+            label.Font = Enum.Font.SourceSans
+            label.TextScaled = true
+            label.Parent = scrollFrame
+        end
     end
 end
 
--- When a player joins, create the HUD and list all objects
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        wait(1) -- Give time for PlayerGui to load
-        local ui = createHUD(player)
-        listAllObjects(game, ui)
-    end)
+-- Search function
+searchBox.Changed:Connect(function(property)
+    if property == "Text" then
+        for _, label in pairs(scrollFrame:GetChildren()) do
+            if label:IsA("TextLabel") then
+                label.Visible = label.Text:lower():find(searchBox.Text:lower()) ~= nil
+            end
+        end
+    end
 end)
+
+-- Auto-update list every 5 seconds
+while true do
+    updateList()
+    wait(5)
+end
